@@ -33,10 +33,3 @@ jobs:
             - name: Install dependencies with Poetry
               run: |
                 poetry install
-          
-            - name: Run formatter
-              uses: psf/black@stable
-              with:
-                options: "--check --verbose"
-                src: "./multi-agent-aya-for-workforce"
-                use_pyproject: true

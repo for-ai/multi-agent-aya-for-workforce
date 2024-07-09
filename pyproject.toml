@@ -2,7 +2,7 @@
 name = "multi-agent-aya-for-workforce"
 version = "0.1.0"
 description = ""
-authors = ["Josue Santana <joansanres@gmail.com>"]
+authors = []
 readme = "README.md"
 package-mode = false
 
