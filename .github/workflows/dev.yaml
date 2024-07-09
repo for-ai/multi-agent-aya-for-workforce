@@ -1,0 +1,42 @@
+name: Formatter Workflow (Dev)
+
+on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - dev
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+    
+        steps:
+            - name: Checkout Git repository
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                python-version: 3.11.9
+    
+            - name: Install Poetry
+              run: |
+                curl -sSL https://install.python-poetry.org | python3 -
+    
+            - name: Configure Poetry
+              run: |
+                echo "$HOME/.local/bin" >> $GITHUB_PATH
+                poetry config virtualenvs.create false
+
+            - name: Install dependencies with Poetry
+              run: |
+                poetry install
+          
+            - name: Run formatter
+              uses: psf/black@stable
+              with:
+                options: "--check --verbose"
+                src: "./multi-agent-aya-for-workforce"
+                use_pyproject: true

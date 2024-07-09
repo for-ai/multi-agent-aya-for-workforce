@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "multi-agent-aya-for-workforce"
+version = "0.1.0"
+description = ""
+authors = ["Josue Santana <joansanres@gmail.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pandas = "^2.2.2"
+numpy = "^1.26.0"
+langchain = "^0.2.7"
+langgraph = "^0.1.5"
+
+[tool.poetry.group.dev.dependencies]
+langsmith = "^0.1.84"
+pytest = "^8.2.2"
+ipykernel = "^6.29.5"
+black = "^24.4.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
