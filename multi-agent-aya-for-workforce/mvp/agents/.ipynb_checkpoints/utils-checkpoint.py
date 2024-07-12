@@ -1,3 +1,4 @@
+
 import os
 import getpass
 from langchain.agents import create_openai_functions_agent
@@ -15,10 +16,11 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores.faiss import DistanceStrategy
 
+from agents import *
 
-from utils import *
-from agents import * 
 
+def format_docs(docs):
+    return "\n\n ------------".join(doc.page_content for doc in docs)
 
 
 def load_retriever():
@@ -111,19 +113,4 @@ def generate_agents():
     english_agent.set_graph(app)
 
     return english_agent, spanish_agent, french_agent
-
-
-
-def generate_response(sender, text):
-
-    english_agent, spanish_agent, french_agent = generate_agents()
-
-    agent_map = {'English':english_agent, 'Spanish':spanish_agent,'French':french_agent}
-
-    agent_map[sender].send_text(text)
-
-    output = [english_agent.chat_history[-1].content,
-              spanish_agent.chat_history[-1].content,
-              french_agent.chat_history[-1].content]
-
-    return output
+       
