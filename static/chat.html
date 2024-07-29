@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-agent Aya for Workforce</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #messages { border: 1px solid #000; height: 300px; overflow-y: scroll; padding: 10px; }
+        #input { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Multi-agent Aya for Workforce</h1>
+    <h3>Bridging Teams, Breaking Barriers: Seamless Communication Beyond Language!</h3>    
+    <div id="username-section">
+        <input type="text" id="username" placeholder="Enter your name">
+        <button onclick="setUsername()">Set Username</button>
+    </div>
+    <div id="chat-section" style="display: none;">
+        <div id="messages"></div>
+        <div id="input">
+            <input type="text" id="messageText" placeholder="Enter your message">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let username;
+
+        function setUsername() {
+            username = document.getElementById("username").value.trim();
+            if (username) {
+                ws = new WebSocket("ws://localhost:8000/ws");
+                ws.onmessage = function(event) {
+                    const message = document.createElement("div");
+                    message.textContent = event.data;
+                    document.getElementById("messages").appendChild(message);
+                };
+                document.getElementById("username-section").style.display = "none";
+                document.getElementById("chat-section").style.display = "block";
+            } else {
+                alert("Please enter a valid username.");
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById("messageText");
+            const message = `${username}: ${input.value}`;
+            ws.send(message);
+            input.value = '';
+        }
+    </script>
+</body>
+</html>
