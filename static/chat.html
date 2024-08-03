@@ -13,9 +13,14 @@
 <body>
     <h1>Multi-agent Aya for Workforce</h1>
     <h3>Bridging Teams, Breaking Barriers: Seamless Communication Beyond Language!</h3>    
-    <div id="username-section">
-        <input type="text" id="username" placeholder="Enter your name">
-        <button onclick="setUsername()">Set Username</button>
+    <div id="setup-section">
+        <input type="text" id="username" placeholder="Enter your Team name">
+        <select id="language">
+            <option value="English">English</option>
+            <option value="French">French</option>
+            <option value="Spanish">Spanish</option>	    
+        </select>
+        <button onclick="setupChat()">Start Chat</button>
     </div>
     <div id="chat-section" style="display: none;">
         <div id="messages"></div>
@@ -28,20 +33,29 @@
     <script>
         let ws;
         let username;
+        let language;
 
-        function setUsername() {
+        function setupChat() {
             username = document.getElementById("username").value.trim();
-            if (username) {
+            language = document.getElementById("language").value;
+
+            if (username && language) {
                 ws = new WebSocket("ws://localhost:8000/ws");
+                
+                ws.onopen = function() {
+                    ws.send(language);  // Send the chat language first
+                };
+
                 ws.onmessage = function(event) {
                     const message = document.createElement("div");
                     message.textContent = event.data;
                     document.getElementById("messages").appendChild(message);
                 };
-                document.getElementById("username-section").style.display = "none";
+
+                document.getElementById("setup-section").style.display = "none";
                 document.getElementById("chat-section").style.display = "block";
             } else {
-                alert("Please enter a valid username.");
+                alert("Please enter a valid username and select a language.");
             }
         }
 
@@ -54,3 +68,4 @@
     </script>
 </body>
 </html>
+
