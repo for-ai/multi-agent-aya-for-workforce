@@ -8,6 +8,10 @@
         body { font-family: Arial, sans-serif; }
         #messages { border: 1px solid #000; height: 300px; overflow-y: scroll; padding: 10px; }
         #input { margin-top: 10px; }
+        .message { margin-bottom: 10px; }
+        .feedback { display: flex; align-items: center; margin-top: 5px; }
+        .feedback button { margin-left: 5px; }
+        .feedback input { margin-left: 10px; flex-grow: 1; }
     </style>
 </head>
 <body>
@@ -17,8 +21,9 @@
         <input type="text" id="username" placeholder="Enter your Team name">
         <select id="language">
             <option value="English">English</option>
-            <option value="French">French</option>
-            <option value="Spanish">Spanish</option>	    
+            <option value="Hindi">Hindi</option>
+            <option value="Spanish">Spanish</option>
+            <option value="Persian">Persian</option>
         </select>
         <button onclick="setupChat()">Start Chat</button>
     </div>
@@ -40,16 +45,15 @@
             language = document.getElementById("language").value;
 
             if (username && language) {
-                ws = new WebSocket("ws://localhost:8000/ws");
-                
+                ws = new WebSocket("ws://localhost:8002/ws");
+
                 ws.onopen = function() {
                     ws.send(language);  // Send the chat language first
                 };
 
                 ws.onmessage = function(event) {
-                    const message = document.createElement("div");
-                    message.textContent = event.data;
-                    document.getElementById("messages").appendChild(message);
+                    const messageData = JSON.parse(event.data);
+                    displayMessage(messageData.sender, messageData.message);
                 };
 
                 document.getElementById("setup-section").style.display = "none";
@@ -59,11 +63,50 @@
             }
         }
 
+        function displayMessage(sender, message) {
+            const messageElement = document.createElement("div");
+            messageElement.className = "message";
+            messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
+
+            // Only add feedback buttons if the sender is not the current user
+            if (sender !== username) {
+                const feedbackDiv = document.createElement("div");
+                feedbackDiv.className = "feedback";
+                feedbackDiv.innerHTML = `
+                    <input type="text" placeholder="Provide feedback">
+                    <button onclick="sendFeedback(this, \`${message}\`, 'like')">Like</button>
+                    <button onclick="sendFeedback(this, \`${message}\`, 'dislike')">Dislike</button>
+                `;
+                messageElement.appendChild(feedbackDiv);
+            }
+
+            document.getElementById("messages").appendChild(messageElement);
+        }
+
         function sendMessage() {
             const input = document.getElementById("messageText");
             const message = `${username}: ${input.value}`;
             ws.send(message);
             input.value = '';
+        }
+
+        function sendFeedback(buttonElement, message, type) {
+            const feedbackDiv = buttonElement.parentElement;
+            const feedbackInput = feedbackDiv.querySelector('input[type="text"]');
+            const feedbackText = feedbackInput.value.trim();
+
+            const feedback = { message: message, feedback: type, sender: username, feedbackText: feedbackText };
+            ws.send(JSON.stringify(feedback));
+
+            // Visually indicate feedback has been sent
+            buttonElement.classList.add("active");
+            buttonElement.disabled = true;
+
+            const siblingButton = buttonElement.nextElementSibling || buttonElement.previousElementSibling;
+            siblingButton.disabled = true;
+
+            // Optionally, disable the feedback input
+            feedbackInput.disabled = true;
         }
     </script>
 </body>
