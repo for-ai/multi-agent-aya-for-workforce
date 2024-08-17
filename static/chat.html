@@ -12,6 +12,25 @@
         .feedback { display: flex; align-items: center; margin-top: 5px; }
         .feedback button { margin-left: 5px; }
         .feedback input { margin-left: 10px; flex-grow: 1; }
+        #user-list { 
+            border: 1px solid lightblue; 
+            background-color: lightblue; 
+            padding: 10px; 
+            margin-top: 10px; 
+            border-radius: 5px;
+        }
+        #user-list h4 {
+            margin: 0;
+            padding-bottom: 5px;
+        }
+        .user { margin-bottom: 5px; }
+        #team-info {
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
@@ -28,6 +47,16 @@
         <button onclick="setupChat()">Start Chat</button>
     </div>
     <div id="chat-section" style="display: none;">
+        <div id="user-info">
+            <span id="user-name">You: <span id="display-username">Unknown</span></span><br>
+            <span id="user-language">Language: <span id="display-language">Unknown</span></span>
+        </div>
+        <div id="team-info">
+            <!-- Team-specific message will be injected here -->
+        </div>
+        <div id="user-list">
+            <h4>Online Users</h4>
+        </div>
         <div id="messages"></div>
         <div id="input">
             <input type="text" id="messageText" placeholder="Enter your message">
@@ -40,6 +69,29 @@
         let username;
         let language;
 
+        const messages = {
+            English: {
+                TeamA: "Scenario: You are Team A fluent in English and your responsibility is technical. There is a cyber security issue in the company, work with other teams to resolve the issue. Team A is technical, Team B is business management, and Team C is legals.",
+                TeamB: "Scenario: You are Team B fluent in English and your responsibility is business management. There is a cyber security issue in the company, work with other teams to resolve the issue. Team A is technical, Team B is business management, and Team C is legals.",
+                TeamC: "Scenario: You are Team C fluent in English and your responsibility is legals. There is a cyber security issue in the company, work with other teams to resolve the issue. Team A is technical, Team B is business management, and Team C is legals."
+            },
+            Hindi: {
+                TeamA: "परिदृश्य: आप टीम ए हैं जो हिंदी में निपुण हैं और आपकी जिम्मेदारी तकनीकी है। कंपनी में एक साइबर सुरक्षा मुद्दा है, अन्य टीमों के साथ मिलकर इसे हल करें। टीम ए तकनीकी है, टीम बी व्यवसाय प्रबंधन है और टीम सी कानूनी है।",
+                TeamB: "परिदृश्य: आप टीम बी हैं जो हिंदी में निपुण हैं और आपकी जिम्मेदारी व्यवसाय प्रबंधन है। कंपनी में एक साइबर सुरक्षा मुद्दा है, अन्य टीमों के साथ मिलकर इसे हल करें। टीम ए तकनीकी है, टीम बी व्यवसाय प्रबंधन है और टीम सी कानूनी है।",
+                TeamC: "परिदृश्य: आप टीम सी हैं जो हिंदी में निपुण हैं और आपकी जिम्मेदारी कानूनी है। कंपनी में एक साइबर सुरक्षा मुद्दा है, अन्य टीमों के साथ मिलकर इसे हल करें। टीम ए तकनीकी है, टीम बी व्यवसाय प्रबंधन है और टीम सी कानूनी है।"
+            },
+            Spanish: {
+                TeamA: "Escenario: Eres el equipo A fluido en español y tu responsabilidad es técnica. Hay un problema de ciberseguridad en la empresa, trabaja con otros equipos para resolverlo. El equipo A es técnico, el equipo B es gestión empresarial y el equipo C es legal.",
+                TeamB: "Escenario: Eres el equipo B fluido en español y tu responsabilidad es gestión empresarial. Hay un problema de ciberseguridad en la empresa, trabaja con otros equipos para resolverlo. El equipo A es técnico, el equipo B es gestión empresarial y el equipo C es legal.",
+                TeamC: "Escenario: Eres el equipo C fluido en español y tu responsabilidad es legal. Hay un problema de ciberseguridad en la empresa, trabaja con otros equipos para resolverlo. El equipo A es técnico, el equipo B es gestión empresarial y el equipo C es legal."
+            },
+            Persian: {
+                TeamA: "سناریو: شما تیم A هستید که به زبان فارسی مسلط هستید و مسئولیت شما فنی است. مشکلی در امنیت سایبری در شرکت وجود دارد، با تیم‌های دیگر همکاری کنید تا آن را حل کنید. تیم A فنی است، تیم B مدیریت کسب و کار است و تیم C حقوقی است.",
+                TeamB: "سناریو: شما تیم B هستید که به زبان فارسی مسلط هستید و مسئولیت شما مدیریت کسب و کار است. مشکلی در امنیت سایبری در شرکت وجود دارد، با تیم‌های دیگر همکاری کنید تا آن را حل کنید. تیم A فنی است، تیم B مدیریت کسب و کار است و تیم C حقوقی است.",
+                TeamC: "سناریو: شما تیم C هستید که به زبان فارسی مسلط هستید و مسئولیت شما حقوقی است. مشکلی در امنیت سایبری در شرکت وجود دارد، با تیم‌های دیگر همکاری کنید تا آن را حل کنید. تیم A فنی است، تیم B مدیریت کسب و کار است و تیم C حقوقی است."
+            }
+        };
+
         function setupChat() {
             username = document.getElementById("username").value.trim();
             language = document.getElementById("language").value;
@@ -49,15 +101,26 @@
 
                 ws.onopen = function() {
                     ws.send(language);  // Send the chat language first
+                    ws.send(username);  // Send the username second
                 };
 
                 ws.onmessage = function(event) {
                     const messageData = JSON.parse(event.data);
-                    displayMessage(messageData.sender, messageData.message);
+                    
+                    if (messageData.type === "user_list") {
+                        updateOnlineUsers(messageData.users);
+                    } else {
+                        displayMessage(messageData.sender, messageData.message);
+                    }
                 };
 
                 document.getElementById("setup-section").style.display = "none";
                 document.getElementById("chat-section").style.display = "block";
+
+                document.getElementById("display-username").textContent = username;
+                document.getElementById("display-language").textContent = language;
+
+                updateTeamInfo(username, language);
             } else {
                 alert("Please enter a valid username and select a language.");
             }
@@ -81,6 +144,40 @@
             }
 
             document.getElementById("messages").appendChild(messageElement);
+        }
+
+        function updateOnlineUsers(users) {
+            const userListDiv = document.getElementById("user-list");
+            let HTML = '<h4>Online Users</h4>';  // Add heading
+            users.forEach(user => {
+                HTML += `<div class="user">${user.username} - ${user.language}</div>`;
+            });
+            userListDiv.innerHTML = HTML;  // Update user list
+        }
+
+        function updateTeamInfo(username, language) {
+            let teamInfo;
+            let teamName = username.startsWith("TeamA") ? "TeamA" : username.startsWith("TeamB") ? "TeamB" : "TeamC";
+
+            switch (language) {
+                case 'English':
+                    teamInfo = messages.English;
+                    break;
+                case 'Hindi':
+                    teamInfo = messages.Hindi;
+                    break;
+                case 'Spanish':
+                    teamInfo = messages.Spanish;
+                    break;
+                case 'Persian':
+                    teamInfo = messages.Persian;
+                    break;
+                default:
+                    teamInfo = messages.English;  // Default to English if unknown
+            }
+
+            const teamInfoDiv = document.getElementById("team-info");
+            teamInfoDiv.innerHTML = teamInfo[teamName] || '';
         }
 
         function sendMessage() {

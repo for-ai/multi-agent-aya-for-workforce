@@ -11,6 +11,8 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
         self.connection_modes: Dict[int, str] = {}
+        self.user_languages: Dict[int, str] = {}  # Track languages by websocket ID
+        self.usernames: Dict[int, str] = {}  # Track usernames by websocket ID
         self.user_feedback: Dict[str, List[Dict]] = {}
 
         self.language_to_team = {
@@ -20,13 +22,21 @@ class ConnectionManager:
             'Persian': 'TeamD'
         }
 
-    async def connect(self, websocket: WebSocket, language: str):
+    async def connect(self, websocket: WebSocket, username: str, language: str):
         self.active_connections.append(websocket)
-        self.connection_modes[id(websocket)] = language
+        websocket_id = id(websocket)
+        self.connection_modes[websocket_id] = language
+        self.user_languages[websocket_id] = language
+        self.usernames[websocket_id] = username
+        await self.broadcast_user_list()  # Broadcast updated user list
 
-    def disconnect(self, websocket: WebSocket):
+    async def disconnect(self, websocket: WebSocket):
+        websocket_id = id(websocket)
         self.active_connections.remove(websocket)
-        del self.connection_modes[id(websocket)]
+        del self.connection_modes[websocket_id]
+        del self.user_languages[websocket_id]
+        del self.usernames[websocket_id]
+        await self.broadcast_user_list()  # Broadcast updated user list
 
     async def broadcast(self, sender: str, translator_message: dict):
         for connection in self.active_connections:
@@ -34,6 +44,12 @@ class ConnectionManager:
             team_message = translator_message.get(team_name)
             await connection.send_text(json.dumps({"sender": sender, "message": team_message}))
 
+    async def broadcast_user_list(self):
+        users = [{"username": self.usernames[id(ws)], "language": self.user_languages[id(ws)]}
+                 for ws in self.active_connections]
+        user_list_message = {"type": "user_list", "users": users}
+        for connection in self.active_connections:
+            await connection.send_text(json.dumps(user_list_message))
 
     def add_feedback(self, sender: str, feedback: dict):
         if sender in self.user_feedback:
@@ -53,12 +69,14 @@ manager = ConnectionManager()
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    language = await websocket.receive_text()
-    if language not in {"English", "Hindi", "Spanish", "Persian"}:
+    language = await websocket.receive_text()  # First message is the language
+    username = await websocket.receive_text()  # Second message is the username
+
+    if language not in {"English", "Hindi", "Spanish", "Persian"} or not username:
         await websocket.close()
         return
 
-    await manager.connect(websocket, language)
+    await manager.connect(websocket, username, language)
 
     try:
         while True:
@@ -66,7 +84,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if data.startswith("{"):
                 feedback_data = json.loads(data)
-                print(f"feedback is given {data}")
                 manager.add_feedback(feedback_data["sender"], feedback_data)
                 manager.save_feedback(feedback_data["sender"])
             else:
@@ -77,11 +94,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 data = {"sender": team, "message": text}
                 response = requests.post(post_url, data=json.dumps(data), headers=headers)
                 response = requests.get(get_url)
-                print(f"response from MT: {response.json()}")
                 await manager.broadcast(team, response.json())
     except Exception as e:
         print(f"Exception: {e}")
-        manager.disconnect(websocket)
+        await manager.disconnect(websocket)  # Await disconnect as it is now async
 
 # Serve static files
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
+
