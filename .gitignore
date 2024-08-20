@@ -5,7 +5,5 @@
 .ipynb_checkpoints/
 
 pycache/
-
-*.pyc
-
 __pycache__/
+*.pyc
