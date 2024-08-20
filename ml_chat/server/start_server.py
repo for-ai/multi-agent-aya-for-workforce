@@ -6,7 +6,7 @@ import pandas as pd
 import threading
 from pydantic import BaseModel
 
-from ml_chat.agents.workflow import MultilingualChatWorkflow
+from workflow import MultilingualChatWorkflow
 
 class InputMessage(BaseModel):
     sender: str
