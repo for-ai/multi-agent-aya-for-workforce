@@ -8,6 +8,7 @@ from langchain_openai.chat_models import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import END, StateGraph, START
 import functools
+from functools import partial
 from typing import TypedDict, Annotated, Sequence, Tuple, Optional, List, Any, Dict
 import operator
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
@@ -15,13 +16,21 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS, Chroma
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_community.vectorstores.faiss import DistanceStrategy
+from langchain_cohere import ChatCohere
+from langchain_anthropic import ChatAnthropic
 
 
 from ml_chat.agents.utils import *
-from ml_chat.agents.agents import * 
+from ml_chat.agents.agents import AyaAgent, UserAgent, get_aya_node, get_supervisor_node, get_user_node, AgentState
 
+def router(state, sender, dest1, dest2):
+    last_message = state["messages"][-1]
+    if last_message.sender == sender:
+        return dest1
+    else:
+        return dest2
 
 
 def load_retriever(path : Path, valid_extensions : List[str]):
@@ -32,7 +41,12 @@ def load_retriever(path : Path, valid_extensions : List[str]):
     # Reading the file data 
     docs = []
     for file in valid_files : 
-        doc_data = PyPDFLoader(path / file).load()
+        if '.pdf' in file.suffix:
+            doc_data = PyPDFLoader(path / file).load()
+        elif '.txt' in file.suffix:
+            doc_data = TextLoader(path / file).load()
+        else:
+            continue
         docs += doc_data
     
     # Splitting the text data into chunks 
@@ -43,19 +57,23 @@ def load_retriever(path : Path, valid_extensions : List[str]):
     store = FAISS.from_documents(splits, OpenAIEmbeddings(), distance_strategy=DistanceStrategy.COSINE)
     retriever = store.as_retriever(search_kwargs={"k": 3})
 
-    return retriever
+    return store, retriever
 
 
 class MultilingualChatWorkflow(object):
 
-    def __init__(self, user_list: List[Tuple[str,str]], knowledge_base_directory: Optional[str] = None, llm: Optional[str] = None, valid_extensions: Optional[List[str]] = ['.pdf'], retriever : Optional[Any] = None ):
+    def __init__(self, user_list: List[Tuple[str,str]], knowledge_base_directory: Optional[str] = None, llm: Optional[str] = 'OpenAI', valid_extensions: Optional[List[str]] = ['.pdf','.txt']):
 
 
         ## Initializing the LLM
-        if llm is None:
-            self.llm = ChatOpenAI(model="gpt-3.5-turbo", streaming=True)
+        if llm.lower() == 'openai':
+            self.llm = ChatOpenAI(model="gpt-4o", streaming=True, temperature = 0.0)
+        elif llm.lower() == 'aya':
+            self.llm = ChatCohere(model="c4ai-aya-23-35b", streaming=True, cohere_api_key = 'tPMB8vd4F7JwWPDR0prGJUxZlhISwEPhLO6PpBme', temperature = 0.0)
+        elif llm.lower() == 'anthropic':
+            self.llm = ChatAnthropic(model='claude-3-opus-20240229', streaming = True, temperature = 0.0)
         else:
-            self.llm = llm
+            raise ValueError("Invalid option provided by LLM. Only accepts the following options : OpenAI, Aya")
 
 
         self.user_list = user_list
@@ -63,11 +81,12 @@ class MultilingualChatWorkflow(object):
 
         self.knowledge_base_directory = self.validate_knowledge_base(knowledge_base_directory, valid_extensions)
 
-        if retriever is None:
-            self.retriever = load_retriever(self.knowledge_base_directory, valid_extensions)
-        else:
-            self.retriever = retriever
+        
+        self.store, self.retriever = load_retriever(self.knowledge_base_directory, valid_extensions)
+        
 
+        ## Initializing the agent workflow
+        self.initialize_agent_workflow()
         
 
 
@@ -101,6 +120,11 @@ class MultilingualChatWorkflow(object):
         # Print the number of valid files
         print(f"Number of valid files (.pdf, .docx, .doc) in the directory: {file_count}")
 
+        # Checking for user provided knowledge base file
+        user_file = path / 'user_data.txt'
+        if not user_file.exists():
+            open(user_file, 'w').close()
+
         return path 
 
 
@@ -115,19 +139,19 @@ class MultilingualChatWorkflow(object):
         self.user_agents = {}
 
         for (userid, lang) in self.user_list:
-            self.user_agents[userid] = {'agent': UserAgent(self.llm, lang)}
-
-        self.aya_agent = AyaAgent(self.llm, self.retriever)
+            self.user_agents[userid] = {'agent': UserAgent(self.llm, userid, lang)}
         
-        self.supervisor_agent = SupervisorAgent(self.llm)
+        self.aya_agent = AyaAgent(self.llm, self.store, self.retriever)
 
+        user_knowledge_file = str(self.knowledge_base_directory.joinpath('user_data.txt'))
 
         for userid in self.user_agents:
             self.user_agents[userid]['node'] = functools.partial(get_user_node, agent=self.user_agents[userid]['agent'], name=userid)
         
+        aya_node = functools.partial(get_aya_node, aya = self.aya_agent, user_knowledge_file = user_knowledge_file, name ="Aya")        
+        supervisor_node = functools.partial(get_supervisor_node)
 
-        aya_node = functools.partial(get_aya_node, agent = self.aya_agent, supervisor_agent = self.supervisor_agent, name ="Aya")
-        supervisor_node = functools.partial(get_supervisor_node, agent = self.supervisor_agent)
+
 
         workflow = StateGraph(AgentState)
 
@@ -138,6 +162,7 @@ class MultilingualChatWorkflow(object):
         
         workflow.add_node("Supervisor", supervisor_node)
         workflow.add_node("Aya",aya_node) 
+ 
         
         ## Defining edges
         workflow.add_edge(START, "Supervisor")
@@ -146,25 +171,14 @@ class MultilingualChatWorkflow(object):
             workflow.add_edge("Supervisor", userid)
             workflow.add_edge(userid, END)
         
-        
-        def router(state) :
-            last_message = state["messages"][-1]
-            if last_message.sender == "Aya":
-                return "Supervisor"
-            else:
-                return 'END'
-                
-        workflow.add_conditional_edges("Aya", router, {'Supervisor':'Supervisor','END':END})
 
-
-        def router2(state) :
-            last_message = state["messages"][-1]
-            if last_message.sender == "Aya":
-                return "END"
-            else:
-                return 'Aya'
-        
-        workflow.add_conditional_edges("Supervisor", router2  ,{'Aya':'Aya','END':END})
+        workflow.add_conditional_edges("Aya",
+                                        partial(router, sender = 'Aya', dest1 = 'Supervisor', dest2 = 'END'),
+                                        {'Supervisor':'Supervisor','END':END})
+    
+        workflow.add_conditional_edges("Supervisor", 
+                                       partial(router, sender = 'Aya', dest1 = 'END', dest2 = 'Aya'),
+                                       {'Aya':'Aya','END':END})
 
         ## Compiling Graph
         self.app = workflow.compile()
